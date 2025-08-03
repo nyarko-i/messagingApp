@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import '../services/auth_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -8,13 +9,10 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
-  final _auth = FirebaseAuth.instance;
-  final _formKey = GlobalKey<FormState>();
-
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
-
+  final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
   @override
@@ -26,43 +24,33 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> _signUpWithEmail() async {
-    final form = _formKey.currentState;
-    if (form == null || !form.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
     if (_passwordCtrl.text != _confirmCtrl.text) {
       _showMsg('Passwords do not match');
       return;
     }
+
     setState(() => _isLoading = true);
     try {
-      await _auth.createUserWithEmailAndPassword(
-        email: _emailCtrl.text.trim(),
-        password: _passwordCtrl.text,
-      );
+      final auth = context.read<AuthService>();
+      await auth.signUpWithEmail(_emailCtrl.text.trim(), _passwordCtrl.text);
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/chat');
-    } on FirebaseAuthException catch (e) {
-      String err = switch (e.code) {
-        'email-already-in-use' => 'Email already in use',
-        'weak-password' => 'Weak password',
-        _ => e.message ?? 'Sign up failed',
-      };
-      _showMsg(err);
+    } catch (e) {
+      _showMsg('Signup failed: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _showMsg(String msg) {
-    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
-    final p = Theme.of(context).primaryColor;
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Account')),
+      appBar: AppBar(title: const Text('Create Account'), centerTitle: true),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Form(
@@ -75,8 +63,11 @@ class _SignupScreenState extends State<SignupScreen> {
                 controller: _emailCtrl,
                 decoration: const InputDecoration(labelText: 'Email'),
                 keyboardType: TextInputType.emailAddress,
-                validator: (v) =>
-                    (v?.trim().isEmpty ?? true) ? 'Required' : null,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Required';
+                  if (!v.contains('@')) return 'Enter valid email';
+                  return null;
+                },
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -99,15 +90,12 @@ class _SignupScreenState extends State<SignupScreen> {
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _isLoading ? null : _signUpWithEmail,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: p,
-                  foregroundColor: Colors.white,
-                ),
                 child: Text(_isLoading ? 'Signing up...' : 'Sign Up'),
               ),
               const SizedBox(height: 16),
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () =>
+                    Navigator.pushReplacementNamed(context, '/login'),
                 child: const Text('Already have an account? Log In'),
               ),
             ],

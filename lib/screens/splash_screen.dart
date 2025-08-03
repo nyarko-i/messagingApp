@@ -13,13 +13,10 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(seconds: 5), () {
+    Future.delayed(const Duration(seconds: 5), () {
       final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        Navigator.pushReplacementNamed(context, '/chat');
-      } else {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
+      final route = user != null ? '/chat' : '/login';
+      if (mounted) Navigator.pushReplacementNamed(context, route);
     });
   }
 
