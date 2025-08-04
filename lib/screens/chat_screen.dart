@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../services/auth_service.dart';
 import '../services/chat_service.dart';
+import 'package:intl/intl.dart';
 
 class ChatScreen extends StatefulWidget {
   final String receiverId;
@@ -19,9 +20,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _sendMessage() async {
     final text = _msgCtrl.text.trim();
-    if (text.isEmpty) {
-      return;
-    }
+    if (text.isEmpty) return;
 
     final auth = context.read<AuthService>();
     final chat = context.read<ChatService>();
@@ -37,14 +36,6 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  Future<void> _signOut() async {
-    await context.read<AuthService>().signOut();
-    if (!mounted) {
-      return;
-    }
-    Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
-  }
-
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
@@ -52,16 +43,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final me = auth.currentUser!.uid;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Message'),
-        centerTitle: true,
-        actions: [
-          TextButton(
-            onPressed: _signOut,
-            child: const Text('Log Out', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Message'), centerTitle: true),
       body: Column(
         children: [
           Expanded(
@@ -82,7 +64,15 @@ class _ChatScreenState extends State<ChatScreen> {
                   itemBuilder: (_, i) {
                     final m = docs[i].data() as Map<String, dynamic>;
                     final isMe = m['senderId'] == me;
-                    return _MsgBubble(text: m['text'] ?? '', isMe: isMe);
+                    final ts = m['timestamp'] as Timestamp?;
+                    final time = ts != null
+                        ? DateFormat.Hm().format(ts.toDate())
+                        : '';
+                    return _MsgBubble(
+                      text: m['text'] ?? '',
+                      isMe: isMe,
+                      time: time,
+                    );
                   },
                 );
               },
@@ -95,7 +85,6 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 Expanded(
                   child: TextField(
-                    key: ValueKey(_msgCtrl.text),
                     controller: _msgCtrl,
                     decoration: const InputDecoration(
                       hintText: 'Type a message…',
@@ -114,11 +103,16 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-/// A simple bubble widget for each message.
 class _MsgBubble extends StatelessWidget {
   final String text;
   final bool isMe;
-  const _MsgBubble({required this.text, required this.isMe});
+  final String time;
+
+  const _MsgBubble({
+    required this.text,
+    required this.isMe,
+    required this.time,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -144,7 +138,17 @@ class _MsgBubble extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: bgColor, borderRadius: radius),
-            child: Text(text),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(text),
+                const SizedBox(height: 4),
+                Text(
+                  time,
+                  style: const TextStyle(fontSize: 10, color: Colors.black54),
+                ),
+              ],
+            ),
           ),
         ],
       ),
