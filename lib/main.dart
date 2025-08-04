@@ -6,6 +6,7 @@ import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
+import 'screens/people_screen.dart';
 import 'screens/chat_screen.dart';
 import 'services/auth_service.dart';
 import 'services/chat_service.dart';
@@ -37,7 +38,23 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login': (_) => const LoginScreen(),
         '/signup': (_) => const SignupScreen(),
-        '/chat': (_) => const ChatScreen(),
+        '/people': (_) => const PeopleScreen(),
+        '/chat': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments;
+
+          if (args is! String) {
+            return const Scaffold(
+              body: Center(
+                child: Text(
+                  'Invalid or missing chat user ID',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            );
+          }
+
+          return ChatScreen(receiverId: args);
+        },
       },
     );
   }

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../services/auth_service.dart';
 import '../services/chat_service.dart';
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+  final String receiverId;
+  const ChatScreen({required this.receiverId, super.key});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -16,14 +18,18 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scrollCtrl = ScrollController();
 
   Future<void> _sendMessage() async {
-    final msg = _msgCtrl.text.trim();
-    if (msg.isEmpty) return;
+    final text = _msgCtrl.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
 
     final auth = context.read<AuthService>();
     final chat = context.read<ChatService>();
+    final me = auth.currentUser!.uid;
 
-    await chat.sendMessage(msg, auth.currentUser!.uid);
-    _msgCtrl.clear(); // This clears the input text
+    await chat.sendMessage(text, me, widget.receiverId);
+    _msgCtrl.clear();
+
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollCtrl.hasClients) {
         _scrollCtrl.jumpTo(_scrollCtrl.position.minScrollExtent);
@@ -33,7 +39,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _signOut() async {
     await context.read<AuthService>().signOut();
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
   }
 
@@ -41,10 +49,11 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
     final chat = context.watch<ChatService>();
+    final me = auth.currentUser!.uid;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chat'),
+        title: const Text('Message'),
         centerTitle: true,
         actions: [
           TextButton(
@@ -56,25 +65,24 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           Expanded(
-            child: StreamBuilder(
-              stream: chat.getMessageStream(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
+            child: StreamBuilder<QuerySnapshot>(
+              stream: chat.getConversation(me, widget.receiverId),
+              builder: (c, snap) {
+                if (snap.hasError) {
+                  return Center(child: Text('Error: ${snap.error}'));
                 }
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-
-                final docs = snapshot.data!.docs;
+                final docs = snap.data!.docs;
                 return ListView.builder(
                   reverse: true,
                   controller: _scrollCtrl,
                   itemCount: docs.length,
-                  itemBuilder: (ctx, i) {
-                    final d = docs[i].data() as Map<String, dynamic>;
-                    final isMe = d['senderId'] == auth.currentUser!.uid;
-                    return _MsgBubble(text: d['text'] ?? '', isMe: isMe);
+                  itemBuilder: (_, i) {
+                    final m = docs[i].data() as Map<String, dynamic>;
+                    final isMe = m['senderId'] == me;
+                    return _MsgBubble(text: m['text'] ?? '', isMe: isMe);
                   },
                 );
               },
@@ -87,7 +95,7 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 Expanded(
                   child: TextField(
-                    key: ValueKey(_msgCtrl.text), // 👈 This forces a rebuild
+                    key: ValueKey(_msgCtrl.text),
                     controller: _msgCtrl,
                     decoration: const InputDecoration(
                       hintText: 'Type a message…',
@@ -106,6 +114,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
+/// A simple bubble widget for each message.
 class _MsgBubble extends StatelessWidget {
   final String text;
   final bool isMe;
